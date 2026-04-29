@@ -1,70 +1,76 @@
-import { NextRequest, NextResponse } from 'next/server';
-import { createClient } from '@/lib/supabase/server';
-import { triggerReportAutomation } from '@/lib/n8n';
+import { NextRequest, NextResponse } from "next/server";
+import { supabase } from "@/lib/supabase";
 
 export async function POST(request: NextRequest) {
   try {
-    const supabase = createClient();
-    const { data: { user } } = await supabase.auth.getUser();
-    if (!user) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    }
-
+    // -----------------------------------
+    // 1. Get request body
+    // -----------------------------------
     const body = await request.json();
-    const { reportRequestId, clientName, clientWebsite } = body;
 
-    if (!reportRequestId) {
-      return NextResponse.json({ error: 'reportRequestId is required' }, { status: 400 });
+    const requestId = body.requestId;
+
+    if (!requestId) {
+      return NextResponse.json(
+        { error: "requestId is required" },
+        { status: 400 }
+      );
     }
 
-    // Fetch the full report request
-    const { data: reportRequest, error } = await supabase
-      .from('report_requests')
-      .select('*')
-      .eq('id', reportRequestId)
-      .single();
+    // -----------------------------------
+    // 2. Trigger n8n webhook
+    // -----------------------------------
+    const webhookUrl = process.env.N8N_WEBHOOK_URL;
 
-    if (error || !reportRequest) {
-      return NextResponse.json({ error: 'Report request not found' }, { status: 404 });
+    if (!webhookUrl) {
+      return NextResponse.json(
+        { error: "N8N_WEBHOOK_URL missing in env" },
+        { status: 500 }
+      );
     }
 
-    // Trigger n8n automation
-    const result = await triggerReportAutomation(reportRequest, {
-      name: clientName || 'Unknown',
-      website: clientWebsite || null,
+    const n8nResponse = await fetch(webhookUrl, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        requestId,
+      }),
     });
 
-    if (result.success) {
-      // Update report request with execution ID and status
-  // Update report request with execution ID and status
-await (supabase as any)
-  .from('report_requests')
-  .update({
-    status: 'processing',
-    n8n_execution_id: result.executionId,
-    n8n_triggered_at: new Date().toISOString(),
-  })
-  .eq('id', requestId);
-
-      return NextResponse.json({
-        success: true,
-        executionId: result.executionId,
-        message: 'Automation triggered successfully',
-      });
-    } else {
-      // Mark as failed
-      await supabase
-        .from('report_requests')
-        .update({
-          status: 'failed',
-          error_message: result.error,
-        })
-        .eq('id', reportRequestId);
-
-      return NextResponse.json({ error: result.error }, { status: 500 });
+    if (!n8nResponse.ok) {
+      throw new Error("Failed to trigger n8n workflow");
     }
+
+    const result = await n8nResponse.json();
+
+    // -----------------------------------
+    // 3. Update Supabase record
+    // -----------------------------------
+    await (supabase as any)
+      .from("report_requests")
+      .update({
+        status: "processing",
+        n8n_execution_id: result?.executionId || null,
+        n8n_triggered_at: new Date().toISOString(),
+      })
+      .eq("id", requestId);
+
+    // -----------------------------------
+    // 4. Success response
+    // -----------------------------------
+    return NextResponse.json({
+      success: true,
+      executionId: result?.executionId || null,
+    });
+
   } catch (error) {
-    console.error('Trigger automation error:', error);
-    return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
+    console.error("Automation trigger error:", error);
+
+    return NextResponse.json(
+      { error: "Internal Server Error" },
+      { status: 500 }
+    );
   }
 }
