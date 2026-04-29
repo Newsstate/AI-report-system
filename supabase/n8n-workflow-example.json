@@ -1,0 +1,82 @@
+{
+  "name": "SEO Automation Workflow",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "seo-automation",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "webhook-trigger",
+      "name": "Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [250, 300],
+      "webhookId": "seo-automation"
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={ \"received\": true, \"executionId\": \"{{ $execution.id }}\" }",
+        "options": {}
+      },
+      "id": "immediate-response",
+      "name": "Send Immediate Response",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1,
+      "position": [450, 200]
+    },
+    {
+      "parameters": {
+        "url": "=https://api.example.com/process",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "contentType": "json",
+        "body": "={{ JSON.stringify($json) }}",
+        "options": {}
+      },
+      "id": "process-data",
+      "name": "Process SEO Data",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [450, 400]
+    },
+    {
+      "parameters": {
+        "url": "={{ $('Webhook').item.json.callbackUrl }}",
+        "sendBody": true,
+        "contentType": "json",
+        "body": "={\n  \"reportRequestId\": \"{{ $('Webhook').item.json.reportRequestId }}\",\n  \"status\": \"completed\",\n  \"secret\": \"{{ $env.N8N_WEBHOOK_SECRET }}\",\n  \"data\": {\n    \"organicTraffic\": 8432,\n    \"keywordsRanking\": 247,\n    \"backlinks\": 1847,\n    \"domainAuthority\": 42\n  }\n}",
+        "options": {}
+      },
+      "id": "callback",
+      "name": "Send Callback to App",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [700, 400]
+    }
+  ],
+  "connections": {
+    "Webhook": {
+      "main": [
+        [
+          { "node": "Send Immediate Response", "type": "main", "index": 0 },
+          { "node": "Process SEO Data", "type": "main", "index": 0 }
+        ]
+      ]
+    },
+    "Process SEO Data": {
+      "main": [
+        [{ "node": "Send Callback to App", "type": "main", "index": 0 }]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "meta": {
+    "instanceId": "your-n8n-instance-id"
+  }
+}
