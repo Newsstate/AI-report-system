@@ -20,15 +20,17 @@ export async function GET(request: NextRequest) {
 
     // Look up execution ID from request ID
     if (requestId && !execId) {
-      const { data: req } = await supabase
-        .from('report_requests')
-        .select('n8n_execution_id, status')
-        .eq('id', requestId)
-        .single();
+    const { data: req } = await supabase
+  .from("reports")
+  .select("*")
+  .eq("id", reportId)
+  .single();
 
-      if (req?.n8n_execution_id) {
-        execId = req.n8n_execution_id;
-      }
+const report = req as any;
+
+if (report?.n8n_execution_id) {
+  execId = report.n8n_execution_id;
+}
 
       return NextResponse.json({ status: req?.status || 'unknown' });
     }
