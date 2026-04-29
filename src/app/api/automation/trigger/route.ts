@@ -36,8 +36,9 @@ export async function POST(request: NextRequest) {
 
     if (result.success) {
       // Update report request with execution ID and status
-  await supabase
-  .from<any>('report_requests')
+  // Update report request with execution ID and status
+await (supabase as any)
+  .from('report_requests')
   .update({
     status: 'processing',
     n8n_execution_id: result.executionId,
