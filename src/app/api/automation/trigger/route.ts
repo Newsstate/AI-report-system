@@ -36,13 +36,13 @@ export async function POST(request: NextRequest) {
 
     if (result.success) {
       // Update report request with execution ID and status
-     await supabase
-  .from('report_requests')
+  await supabase
+  .from<any>('report_requests')
   .update({
     status: 'processing',
     n8n_execution_id: result.executionId,
     n8n_triggered_at: new Date().toISOString(),
-  } as any)
+  })
   .eq('id', requestId);
 
       return NextResponse.json({
